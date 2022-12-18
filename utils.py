@@ -18,19 +18,16 @@ class HandGestureStaticClassifier:
         self.model_name, self.file_weight_type = file_weight.split('.')
         self.model = pickle.load(open(file_weight,'rb')) if self.file_weight_type == 'pkl' else tf.keras.models.load_model(file_weight)
     
-    def predict(self, rgb_frame):
-        with mp_hands.Hands(
-            static_image_mode=True,
-            max_num_hands=1,
-            min_detection_confidence=0.5) as hands:
+    def predict(self, landmarks, min_conf=0.5):
 
-            results = hands.process(rgb_frame)
-            if not results.multi_hand_landmarks:
-                return None
-            landmarks = [[lm.x,lm.y] for lm in results.multi_hand_landmarks[0].landmark]
-            landmarks_std_scaled = StandardScaler().fit_transform(landmarks)
-            landmarks_Chebyshev = pdist(landmarks_std_scaled, 'chebyshev')
-            input = np.concatenate([landmarks_std_scaled.reshape(-1), landmarks_Chebyshev], axis=0).reshape(1,-1)
-            
-            return self.model.predict(input)[0] if self.file_weight_type == 'pkl'else self.model.predict(input)[0].argmax()
+        landmarks_std_scaled = StandardScaler().fit_transform(landmarks)
+        landmarks_Chebyshev = pdist(landmarks_std_scaled, 'chebyshev')
+        input = np.concatenate([landmarks_std_scaled.reshape(-1), landmarks_Chebyshev], axis=0).reshape(1,-1)
+
+        if self.model_name == 'SVM':
+            return self.model.predict(input)[0]
+        
+        proba =  self.model.predict_proba(input)[0] if self.file_weight_type == 'pkl'else self.model.predict(input)[0]
+
+        return proba.argmax() if proba.max()>=min_conf else None
                 
